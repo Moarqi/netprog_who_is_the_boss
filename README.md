@@ -1,2 +1,2 @@
 # netprog_who_is_the_boss
-Final Project for Network Programming Class @ Uni Bielefeld - Distributed server architecture
+Final project for network programming class @ Uni Bielefeld - Distributed server architecture
