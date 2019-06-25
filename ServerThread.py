@@ -40,7 +40,6 @@ class ServerThread(Thread):
                 _socket.setblocking(0)
                 _socket.send(bytes(f'[INFO] {self.port} {self.score}\n', 'utf-8'))
                 print(f'notify sent to {port}')
-                print(_socket.getpeername())
                 self.inputs.append(_socket)
             except socket.error as e:
                 if e.errno != errno.ECONNREFUSED:
@@ -51,7 +50,7 @@ class ServerThread(Thread):
         self.score = self.base_score + (arr.now().timestamp - self.time_started)
         info, port, score = data.split(' ')
 
-        self.new_server = not port in self.running_servers.keys()
+        self.new_server = not port in self.running_servers.keys() if not self.new_server else True
 
         self.running_servers[port] = {
             "score": score,
@@ -82,7 +81,6 @@ class ServerThread(Thread):
 
                     if receive_socket not in self.outputs:
                         self.outputs.append(receive_socket)
-                    print(addr)
 
                 else:
                     recievedbytes = _socket.recv(1024)
@@ -92,7 +90,6 @@ class ServerThread(Thread):
                         print(recieved_data)
 
                         if '[INFO]' in recieved_data:
-                            print(_socket)
                             self.process_recieved_data(recieved_data)
                         if _socket not in respond_to:
                             respond_to.append(_socket)
@@ -127,10 +124,10 @@ class ServerThread(Thread):
 
                 _socket.close()
 
-            print([self.running_servers[server] for server in self.running_servers])
-            if self.new_server and not any([not server['updated'] for server in self.running_servers.values()]):
+            if self.new_server and all(
+                [server['updated'] for server in self.running_servers.values()]
+            ):
                 self.new_server = False
-                print([server['score'] for server in self.running_servers.values()])
                 max_score = float(max([server['score'] for server in self.running_servers.values()]))
 
                 if self.score > max_score:

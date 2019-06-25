@@ -46,9 +46,10 @@ def signal_handler(signal, frame):
 def exit_setup():
     signal.signal(signal.SIGINT, signal_handler)
 
+score = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 exit_setup()
 find_listen_port()
-listen_thread = ServerThread(listen_socket, port, 100)
+listen_thread = ServerThread(listen_socket, port, score)
 listen_thread.start()
 
 while True:
