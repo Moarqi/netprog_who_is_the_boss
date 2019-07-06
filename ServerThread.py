@@ -63,6 +63,7 @@ class ServerThread(Thread):
     def kill_all_child_processes(self):
         children = psutil.Process().children(recursive=True)
         for child in children:  # this does assume, that the child we have is the correct one to terminate :)
+            print(child)
             child.terminate()
             child.kill()
 
@@ -127,6 +128,12 @@ class ServerThread(Thread):
                     subprocess.Popen(['./master.sh'])
 
             else:
+                max_port = max([
+                    max(
+                        server_for_ip,
+                        key=lambda s: server_for_ip[s]['score']
+                    ) for server_for_ip in self.running_servers.values()
+                ])
                 if not self.slave_script_running:
                     if self.master_script_running:
                         self.master_script_running = False
@@ -141,6 +148,9 @@ class ServerThread(Thread):
                         ) for server_for_ip in self.running_servers.values()
                     ])
                     subprocess.Popen(['./slave.sh', max_port])
+                else:
+                    print(f"I KNOW THAT MY MASTER IS {max_port} BUT MY SCRIPT IS RUNNING:)")
+
 
 
     def run(self):
