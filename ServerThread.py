@@ -51,7 +51,6 @@ class ServerThread(Thread):
         Thread.__init__(self)
 
     # overwrite join to set the event
-    # TODO: need to kill all childs..
     def join(self, timeout=None):
         self.do_stop.set()
         self.kill_all_child_processes()
