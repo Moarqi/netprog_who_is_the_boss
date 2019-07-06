@@ -61,14 +61,20 @@ class ServerThread(Thread):
 
 
     def kill_all_child_processes(self):
+        """
+        kills all child processes of the current process.
+        """
         children = psutil.Process().children(recursive=True)
         for child in children:  # this does assume, that the child we have is the correct one to terminate :)
-            print(child)
             child.terminate()
             child.kill()
 
 
     def notify_running_servers(self):
+        """
+        notify all server in ip/port range. effectively scans the port range for
+        every ip in the self.ips list
+        """
         for ip in self.ips: # catch network unreachable
             for port in self.port_range:
                 # WARNING:
@@ -93,7 +99,7 @@ class ServerThread(Thread):
 
 
     def process_recieved_data(self, data, ip):
-        self.score = self.base_score + (arr.now().timestamp - self.time_started)
+        """processes the recieved data and updates the running_servers dict."""
         info, port, score = data.split(' ')
 
         self.update_required = not port in (
@@ -115,11 +121,19 @@ class ServerThread(Thread):
 
 
     def handle_server_list(self):
+        """
+        checks if any change for master/slave is needed.
+        when all scores in self.running_server are up to date, it compares the max score
+        of the other servers with the current score.
+        starts the appropriate script
+        when the status changed.
+        """
         if len(self.running_servers.keys()) and self.update_required and all(
             [server['updated'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()]
         ):
             self.update_required = False
             max_score = max([server['score'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()])
+            self.score = self.base_score + (arr.now().timestamp - self.time_started)
 
             if self.score > max_score:
                 if not self.master_script_running:
@@ -158,6 +172,7 @@ class ServerThread(Thread):
 
 
     def run(self):
+        """main server method. handles all in/out sockets."""
         self.notify_running_servers()
         respond_to = []
 
