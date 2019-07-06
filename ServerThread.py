@@ -69,7 +69,7 @@ class ServerThread(Thread):
 
 
     def notify_running_servers(self):
-        for ip in self.ips:
+        for ip in self.ips: # catch network unreachable
             for port in self.port_range:
                 # WARNING:
                 # this approach is actually not that nice. it could lead to an inf-loop if we would use the

@@ -47,9 +47,13 @@ def exit_setup():
     signal.signal(signal.SIGINT, signal_handler)
 
 score = int(sys.argv[1]) if len(sys.argv) > 1 else 100
+ips = ['localhost'] if len(sys.argv) < 3 else [arg for arg in sys.argv[2:]]
+
+print(ips)
+
 exit_setup()
 find_listen_port()
-listen_thread = ServerThread(listen_socket, port, score)
+listen_thread = ServerThread(listen_socket, port, score, ips)
 listen_thread.start()
 
 while True:
