@@ -5,58 +5,143 @@ import arrow as arr
 from threading import Thread, Event
 from select import select
 import errno
+import psutil
+import subprocess
+
 
 class ServerThread(Thread):
-    def __init__(self, server_socket, port, score):
-        self.server_socket = server_socket
-        self.port = port
-        self.inputs = [self.server_socket]
-        self.outputs = []
-        self.do_stop = Event()
+    """class for an independent serverthread which listens on the given port
+    and accepts connections on every configured port"""
+    def __init__(
+        self,
+        server_socket,
+        port,
+        score,
+        ips = ['localhost'],
+        port_range = range(1000, 2000)
+    ):
+        """
+        Extends Thread. closes all sockets when calling join()
 
+        Keyword arguments:
+        server_socket -- server socket to accept connections
+        port -- port the socket does listen on
+        score -- initial score
+        ips -- ips of all possible servers (default = ['localhost'])
+        port_range -- port range for every server (default = range(1000, 2000)
+        """
+        self.port = port
+        self.ips = ips
+        self.port_range = port_range
         self.score = score
         self.base_score = score
         self.time_started = arr.now().timestamp
 
+        self.server_socket = server_socket
+        self.inputs = [self.server_socket]
+        self.outputs = []
         self.running_servers = {}
-        self.new_server = False
+
+        self.do_stop = Event()
+
+        self.update_required = False
         self.master_script_running = False
         self.slave_script_running = False
+
         Thread.__init__(self)
 
     # overwrite join to set the event
+    # TODO: need to kill all childs..
     def join(self, timeout=None):
         self.do_stop.set()
+        self.kill_all_child_processes()
+
         print("waiting for listener to stop..\n")
         Thread.join(self, timeout)
 
 
+    def kill_all_child_processes(self):
+        children = psutil.Process().children(recursive=True)
+        for child in children:  # this does assume, that the child we have is the correct one to terminate :)
+            child.terminate()
+            child.kill()
+
+
     def notify_running_servers(self):
-        for port in range(1000, 2000):
-            if port == self.port:
-                continue
-            try:
-                _socket = socket.create_connection(('localhost', port))
-                _socket.setblocking(0)
-                _socket.send(bytes(f'[INFO] {self.port} {self.score}\n', 'utf-8'))
-                print(f'notify sent to {port}')
-                self.inputs.append(_socket)
-            except socket.error as e:
-                if e.errno != errno.ECONNREFUSED:
-                    raise
+        for ip in self.ips:
+            for port in self.port_range:
+                # WARNING:
+                # this approach is actually not that nice. it could lead to an inf-loop if we would use the
+                # network ip address of THIS computer. this is ignored for the size of the project.
+                if port == self.port and (ip == 'localhost' or ip == '127.0.0.1'):
+                    continue
+                try:
+                    _socket = socket.create_connection((ip, port))
+                    _socket.setblocking(0)
+                    _socket.send(bytes(f'[INFO] {self.port} {self.score}\n', 'utf-8'))
+                    print(f'notify sent to {port}')
+                    self.inputs.append(_socket)
+
+                except socket.error as e:
+                    if e.errno != errno.ECONNREFUSED:
+                        raise
 
 
-    def process_recieved_data(self, data):
+    def process_recieved_data(self, data, ip):
         self.score = self.base_score + (arr.now().timestamp - self.time_started)
         info, port, score = data.split(' ')
 
-        self.new_server = not port in self.running_servers.keys() if not self.new_server else True
+        self.update_required = not port in (
+            server.keys() for server in self.running_servers.values()
+        ) if not self.update_required else True
 
-        self.running_servers[port] = {
-            "score": score,
-            "updated": True
-        }
-        # new server, decide what to do
+        try:
+            self.running_servers[ip][port] = {
+                "score": float(score),
+                "updated": True
+            }
+        except KeyError:
+            self.running_servers[ip] = {
+                f"{port}": {
+                    "score": float(score),
+                    "updated": True
+                }
+            }
+
+
+    def handle_server_list(self):
+        if len(self.running_servers.keys()) and self.update_required and all(
+            [server['updated'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()]
+        ):
+            self.update_required = False
+            max_score = max([server['score'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()])
+
+            if self.score > max_score:
+                if not self.master_script_running:
+                    if self.slave_script_running:
+                        self.slave_script_running = False
+                        self.kill_all_child_processes()
+
+                    self.master_script_running = True
+
+                    subprocess.Popen(['./master.sh'])
+
+            else:
+                if not self.slave_script_running:
+                    if self.master_script_running:
+                        self.master_script_running = False
+                        self.kill_all_child_processes()
+
+                    self.slave_script_running = True
+
+                    max_port = max([
+                        max(
+                            server_for_ip,
+                            key=lambda s: server_for_ip[s]['score']
+                        ) for server_for_ip in self.running_servers.values()
+                    ])
+                    subprocess.Popen(['./slave.sh', max_port])
+
 
     def run(self):
         self.notify_running_servers()
@@ -76,8 +161,9 @@ class ServerThread(Thread):
                     self.inputs.append(receive_socket)
                     self.outputs.extend(respond_to)
 
-                    for server in self.running_servers.values():
-                        server['updated'] = False
+                    for servers_for_ip in self.running_servers.values():
+                        for server in servers_for_ip.values():
+                            server['updated'] = False
 
                     if receive_socket not in self.outputs:
                         self.outputs.append(receive_socket)
@@ -88,9 +174,10 @@ class ServerThread(Thread):
                     if recievedbytes:
                         recieved_data = recievedbytes.decode('utf-8')
                         print(recieved_data)
+                        remote_ip, _ = _socket.getpeername()
 
                         if '[INFO]' in recieved_data:
-                            self.process_recieved_data(recieved_data)
+                            self.process_recieved_data(recieved_data, remote_ip)
                         if _socket not in respond_to:
                             respond_to.append(_socket)
 
@@ -104,6 +191,7 @@ class ServerThread(Thread):
                             respond_to.remove(_socket)
 
                         self.running_servers.clear()
+                        self.update_required = True
                         self.outputs.extend(respond_to)
 
                         _socket.close()
@@ -112,7 +200,6 @@ class ServerThread(Thread):
                 if _socket is not self.server_socket and _socket in respond_to:
                     self.score = self.base_score + (arr.now().timestamp - self.time_started)
                     _socket.send(bytes(f'[INFO] {self.port} {self.score}\n', 'utf-8'))
-                    # respond_to.remove(_socket)
                     self.outputs.remove(_socket)
 
             for _socket in error_sockets:
@@ -124,34 +211,7 @@ class ServerThread(Thread):
 
                 _socket.close()
 
-            if self.new_server and all(
-                [server['updated'] for server in self.running_servers.values()]
-            ):
-                self.new_server = False
-                max_score = float(max([server['score'] for server in self.running_servers.values()]))
-
-                if self.score > max_score:
-                    if not self.master_script_running:
-                        if self.slave_script_running:
-                            pass  # end script here
-
-                        self.master_script_running = True
-
-                    print('I am the boss :)') # start master shell script here
-
-                else:
-                    if not self.slave_script_running:
-                        if self.master_script_running:
-                            pass  # end script here
-
-                        self.slave_script_running = True
-
-                    max_port = max(
-                        self.running_servers,
-                        key=lambda s: self.running_servers[s]['score']
-                    )
-                    print(f"{max_port} is the boss :(") # start slave shell script here
-
+            self.handle_server_list()
 
         ### SHUTDOWN ###
         for _socket in self.inputs:
@@ -162,7 +222,3 @@ class ServerThread(Thread):
 
         for _socket in respond_to:
             _socket.close()
-
-
-
-
