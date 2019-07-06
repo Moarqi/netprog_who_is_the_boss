@@ -85,7 +85,11 @@ class ServerThread(Thread):
 
                 except socket.error as e:
                     if e.errno != errno.ECONNREFUSED:
-                        raise
+                        if e.errno == errno.ENETUNREACH:
+                            self.ips.remove(ip)
+                            break
+                        else:
+                            raise
 
 
     def process_recieved_data(self, data, ip):
