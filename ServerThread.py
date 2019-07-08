@@ -189,6 +189,8 @@ class ServerThread(Thread):
 
                     subprocess.Popen(['./slave.sh', f"{master_ip}:{master_port}"])
                 else:
+                    # TODO: at this point the master could change and the running script
+                    # (if it needs the master address) will continue with the old one.. hm..
                     print(f"I KNOW THAT MY MASTER IS {master_ip}:{master_port} BUT MY SCRIPT IS RUNNING:)")
 
 
