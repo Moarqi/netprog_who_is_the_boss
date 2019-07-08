@@ -1,5 +1,6 @@
 import socket
 import os
+from operator import itemgetter
 from time import get_clock_info
 import arrow as arr
 from threading import Thread, Event
@@ -8,6 +9,7 @@ import errno
 import psutil
 import subprocess
 
+self_identifier = 'OH_THIS_IS_ME'
 
 class ServerThread(Thread):
     """class for an independent serverthread which listens on the given port
@@ -135,10 +137,39 @@ class ServerThread(Thread):
             ]
         ):
             self.update_required = False
-            max_score = max([server['score'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()])
-            self.score = self.base_score + (arr.now().timestamp - self.time_started)
 
-            if self.score > max_score:
+            # I bet this is the most complicate way to do it but my brain just turned off..
+            # TODO: needs rework
+            server_list = [
+                (
+                    max(
+                        server_for_ip_value,
+                        key=lambda s: server_for_ip_value[s]['score']
+                    ),
+                    server_for_ip_key,
+                    server_for_ip_value[
+                        max(
+                            server_for_ip_value,
+                            key=lambda s: server_for_ip_value[s]['score']
+                        )
+                    ]['score']
+                )
+                for server_for_ip_key, server_for_ip_value in self.running_servers.items()
+            ]
+
+            self.score = self.base_score + (arr.now().timestamp - self.time_started)
+            server_list.append((self.port, self_identifier, self.score))
+
+            master_port, master_ip, master_score = sorted(
+                server_list,
+                key=lambda x: (-x[2], int(x[0]))
+            )[0] #  first: score, second: port
+            # TODO: we could use a third sorting argument which could take the length
+            # of the adress or the sum over the ip address or something.
+            # TODO: when I think too much about that, there are a ton of edge cases...
+            # TODO: DO NOT THINK ABOUT IT
+
+            if master_ip == self_identifier:
                 if not self.master_script_running:
                     if self.slave_script_running:
                         self.slave_script_running = False
@@ -149,31 +180,6 @@ class ServerThread(Thread):
                     subprocess.Popen(['./master.sh'])
 
             else:
-                # TODO: i bet this is the most complicate way to do it but my brain just turned off.. needs rework
-                server_list = [
-                    (
-                        max(
-                            server_for_ip_value,
-                            key=lambda s: server_for_ip_value[s]['score']
-                        ),
-                        server_for_ip_key,
-                        server_for_ip_value[
-                            max(
-                                server_for_ip_value,
-                                key=lambda s: server_for_ip_value[s]['score']
-                            )
-                        ]['score']
-                    )
-                    for server_for_ip_key, server_for_ip_value in self.running_servers.items()
-                ]
-
-                print(server_list)
-
-                max_port, max_ip, _ = sorted(
-                    server_list,
-                    key=lambda x: x[2], reverse=True
-                )[0]
-
                 if not self.slave_script_running:
                     if self.master_script_running:
                         self.master_script_running = False
@@ -181,10 +187,9 @@ class ServerThread(Thread):
 
                     self.slave_script_running = True
 
-                    subprocess.Popen(['./slave.sh', f"{max_ip}:{max_port}"])
+                    subprocess.Popen(['./slave.sh', f"{master_ip}:{master_port}"])
                 else:
-                    print(f"I KNOW THAT MY MASTER IS {max_ip}:{max_port} BUT MY SCRIPT IS RUNNING:)")
-
+                    print(f"I KNOW THAT MY MASTER IS {master_ip}:{master_port} BUT MY SCRIPT IS RUNNING:)")
 
 
     def run(self):

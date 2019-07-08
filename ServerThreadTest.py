@@ -1,5 +1,7 @@
 from unittest import TestCase, main
+from unittest.mock import patch, PropertyMock
 from ServerThread import ServerThread
+import arrow as arr
 
 
 class ServerThreadTest(TestCase):
@@ -51,6 +53,35 @@ class ServerThreadTest(TestCase):
 
         self.assertEqual(self.thread.slave_script_running, True)
         self.assertEqual(self.thread.master_script_running, False)
+
+
+    def test_handle_server_list_edge_case(self):
+        self.thread.update_required = True
+        self.thread.slave_script_running = False
+        self.thread.master_script_running = True
+        self.thread.running_servers = {
+            "127.0.0.1": {
+                "1004": {
+                    "score": 100.0,
+                    "updated": True
+                }
+            },
+            "192.168.0.5": {
+                "1002": {
+                    "score": 100.0,
+                    "updated": True
+                }
+            }
+        }
+
+        # mock arrow now to not update score with runtime
+        current_time = arr.now()
+        with patch('arrow.now') as mock_arr_now:
+            mock_arr_now.return_value = current_time
+            self.thread.handle_server_list()
+
+        self.assertEqual(self.thread.slave_script_running, False)
+        self.assertEqual(self.thread.master_script_running, True)
 
 
     def tearDown(self):

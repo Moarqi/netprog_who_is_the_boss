@@ -12,6 +12,10 @@ server_sockets = []
 port = 1000
 
 def find_listen_port():
+    """
+    find free port for server socket starting at 1000.
+    adding 2 each iteration.
+    """
     connected = False
     global port
 
@@ -31,6 +35,9 @@ def find_listen_port():
 
 
 def signal_handler(signal, frame):
+    """
+    INTERRUPT HANDLER
+    """
     global listen_socket
     global listen_thread
     global server_sockets
@@ -49,12 +56,10 @@ def exit_setup():
 score = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 ips = ['localhost'] if len(sys.argv) < 3 else [arg for arg in sys.argv[2:]]
 
-print(ips)
-
 exit_setup()
 find_listen_port()
 listen_thread = ServerThread(listen_socket, port, score, ips)
 listen_thread.start()
 
 while True:
-    time.sleep(60*24)
+    time.sleep(60*24) # this prevents high cpu load
