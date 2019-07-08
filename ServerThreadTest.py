@@ -8,16 +8,19 @@ class ServerThreadTest(TestCase):
         self.thread = ServerThread(None, 1000, 100)
 
     def test_process_recieved_data(self):
+        ip = "1.1.1.1"
         data = "[INFO] 1002 12345"
 
         expected_server_dict = {
-            "1002": {
-                "score": 12345.0,
-                "updated": True
+            f"{ip}": {
+                "1002": {
+                    "score": 12345.0,
+                    "updated": True
+                }
             }
         }
 
-        self.thread.process_recieved_data(data)
+        self.thread.process_recieved_data(data, ip)
 
         self.assertDictEqual(
             self.thread.running_servers,
@@ -30,13 +33,17 @@ class ServerThreadTest(TestCase):
         self.thread.slave_script_running = False
         self.thread.master_script_running = True
         self.thread.running_servers = {
-            "1002": {
-                "score": 12345.0,
-                "updated": True
+            "127.0.0.1": {
+                "1004": {
+                    "score": 1.0,
+                    "updated": True
+                }
             },
-            "1004": {
-                "score": 1.0,
-                "updated": True
+            "192.168.0.5": {
+                "1002": {
+                    "score": 12345.0,
+                    "updated": True
+                }
             }
         }
 

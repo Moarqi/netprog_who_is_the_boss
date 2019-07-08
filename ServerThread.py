@@ -128,7 +128,11 @@ class ServerThread(Thread):
         when the status changed.
         """
         if len(self.running_servers.keys()) and self.update_required and all(
-            [server['updated'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()]
+            [
+                server['updated']
+                for server_for_ip in self.running_servers.values()
+                for server in server_for_ip.values()
+            ]
         ):
             self.update_required = False
             max_score = max([server['score'] for server_for_ip in self.running_servers.values() for server in server_for_ip.values()])
@@ -145,12 +149,31 @@ class ServerThread(Thread):
                     subprocess.Popen(['./master.sh'])
 
             else:
-                max_port = max([
-                    max(
-                        server_for_ip,
-                        key=lambda s: server_for_ip[s]['score']
-                    ) for server_for_ip in self.running_servers.values()
-                ])
+                # TODO: i bet this is the most complicate way to do it but my brain just turned off.. needs rework
+                server_list = [
+                    (
+                        max(
+                            server_for_ip_value,
+                            key=lambda s: server_for_ip_value[s]['score']
+                        ),
+                        server_for_ip_key,
+                        server_for_ip_value[
+                            max(
+                                server_for_ip_value,
+                                key=lambda s: server_for_ip_value[s]['score']
+                            )
+                        ]['score']
+                    )
+                    for server_for_ip_key, server_for_ip_value in self.running_servers.items()
+                ]
+
+                print(server_list)
+
+                max_port, max_ip, _ = sorted(
+                    server_list,
+                    key=lambda x: x[2], reverse=True
+                )[0]
+
                 if not self.slave_script_running:
                     if self.master_script_running:
                         self.master_script_running = False
@@ -158,20 +181,17 @@ class ServerThread(Thread):
 
                     self.slave_script_running = True
 
-                    max_port = max([
-                        max(
-                            server_for_ip,
-                            key=lambda s: server_for_ip[s]['score']
-                        ) for server_for_ip in self.running_servers.values()
-                    ])
-                    subprocess.Popen(['./slave.sh', max_port])
+                    subprocess.Popen(['./slave.sh', f"{max_ip}:{max_port}"])
                 else:
-                    print(f"I KNOW THAT MY MASTER IS {max_port} BUT MY SCRIPT IS RUNNING:)")
+                    print(f"I KNOW THAT MY MASTER IS {max_ip}:{max_port} BUT MY SCRIPT IS RUNNING:)")
 
 
 
     def run(self):
-        """main server method. handles all in/out sockets."""
+        """
+        main server method. handles all in/out sockets and calls functions to
+        process data and determine master.
+        """
         self.notify_running_servers()
         respond_to = []
 

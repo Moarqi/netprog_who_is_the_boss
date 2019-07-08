@@ -11,4 +11,6 @@ starting an instance is as simple as:
 
 Start the server by executing main.py. By default, all instances start with a score of 100 and look for other server on this machine ('localhost'). This can be overriden by giving the parameters as stated above. The score is increased by seconds since the start of the instance.
 
-Master is the Server with the highest score.
+Master is the server with the highest score (eg. the longest runtime).
+
+A proper shutdown is performed when pressing *strg + c*
