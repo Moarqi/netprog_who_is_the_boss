@@ -23,7 +23,43 @@ class ServerThreadTest(TestCase):
         }
 
         self.thread.process_recieved_data(data, ip)
+        self.assertDictEqual(
+            self.thread.running_servers,
+            expected_server_dict
+        )
 
+        data = "[INFO] 1008 11"
+
+        expected_server_dict = {
+            f"{ip}": {
+                "1002": {
+                    "score": 12345.0,
+                    "updated": True
+                },
+                "1008": {
+                    "score": 11,
+                    "updated": True
+                }
+            }
+        }
+
+        self.thread.process_recieved_data(data, ip)
+        self.assertDictEqual(
+            self.thread.running_servers,
+            expected_server_dict
+        )
+
+        ip =  "192.168.0.5"
+        data = "[INFO] 1002 12345"
+
+        expected_server_dict[ip] = {
+            "1002": {
+                "score": 12345.0,
+                "updated": True
+            }
+        }
+
+        self.thread.process_recieved_data(data, ip)
         self.assertDictEqual(
             self.thread.running_servers,
             expected_server_dict
